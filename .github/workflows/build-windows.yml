@@ -1,0 +1,56 @@
+name: Build GameMaster for Windows
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt pyinstaller
+
+      - name: Compile Python files
+        run: python -m compileall app src tests
+
+      - name: Run tests
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python -m pytest -q
+
+      - name: Validate official Scrcpy files
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "tools/official-scrcpy/scrcpy.exe")) {
+            Write-Error "Missing tools/official-scrcpy/scrcpy.exe"
+          }
+          if (-not (Test-Path "tools/official-scrcpy/scrcpy-server")) {
+            Write-Error "Missing tools/official-scrcpy/scrcpy-server"
+          }
+
+      - name: Build package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Compress-Archive -Path app,src,profiles,tools,run.bat,README_AR.md,ARCHITECTURE_AR.md,TEST_PLAN_AR.md -DestinationPath dist/GameMaster-windows.zip -Force
+
+      - name: Upload Windows package
+        uses: actions/upload-artifact@v4
+        with:
+          name: GameMaster-windows
+          path: dist/GameMaster-windows.zip
